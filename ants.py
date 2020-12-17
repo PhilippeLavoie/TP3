@@ -1,5 +1,5 @@
-# Prénom, Nom, Matricule
-# Prénom, Nom, Matricule
+# Philippe, Lavoie, 20144246
+# Imad, Mechmachi, 20163388
 
 import numpy as np
 import random as rand
@@ -21,20 +21,50 @@ class Colony:
 
         def __str__(self):
             #TO DO
-            pass
+            return str(self.path) + ', cost : ' + str(self.cost)
 
         def __lt__(self, other):
             #TO DO
-            pass
+            return self.cost < other.cost
 
         # Returns city to be travelled to from current position
         def policy(self):
             if rand.random() < self.colony.q_0:
                 # Deterministic decision
                 # TODO
+                u = self.pos
+                idx = 0
+                while self.mem[idx]:  # recherche le premier non visite
+                    idx += 1
+                for v in range(self.colony.n): # iteration pour trouver le max
+                    if not self.mem[v]:
+                        if self.colony.tau[u][idx]*self.colony.eta(u,idx)**self.colony.beta < self.colony.tau[u][v]*self.colony.eta(u,v)**self.colony.beta:
+                            idx = v
+
+                return idx
             else:
                 # Stochastic decision
                 # TODO
+            
+                r = self.pos    
+                # 1. Calculer les numerateurs, la somme et les probabilitees
+                numerateurs = np.zeros(self.colony.n)
+                for s in range(self.colony.n):
+                    if not self.mem[s]:
+                        numerateurs[s] = self.colony.tau[r][s]*self.colony.eta(r,s)**self.colony.beta
+                prob = numerateurs/np.sum(numerateurs)
+
+                # 2. Generer z ~ U(0,1) uniforme
+                z = rand.random()
+
+                # 3. Generer S : par la methode de l'inverse de la distribution cummuler
+                cummul = 0
+                S = -1
+                while cummul < z:
+                    S += 1
+                    if not self.mem[S]:
+                        cummul += prob[S]
+                return S
 
         # Updates the local pheromones and position of ant
         # while keeping track of total cost and path
@@ -43,16 +73,34 @@ class Colony:
 
             # local updating
             # TODO
+            self.colony.tau[self.pos][destination] = (1-self.colony.alpha)*self.colony.tau[self.pos][destination] + self.colony.alpha*self.colony.tau_0
+            self.colony.tau[destination][self.pos] = self.colony.tau[self.pos][destination]
 
             # Change position
             # TODO
-
+            self.cost += self.colony.adjMat[self.pos][destination]
+            self.pos = destination
+            self.mem[destination] = 1
+            self.path.append(destination)
 
         # Updates the pheromone levels of ALL edges that form 
         # the minimum cost loop at each iteration
         def globalUpdate(self):
             # TODO
+            
+            # Update : du l'arrete de retour au noeud de depart 
+            depart = self.path[0]          
+            self.cost += self.colony.adjMat[depart][self.pos]
+            self.colony.tau[self.pos][depart] = (1-self.colony.alpha)*self.colony.tau[self.pos][depart] + self.colony.alpha*self.colony.tau_0
+            self.colony.tau[depart][self.pos] = self.colony.tau[self.pos][depart]
 
+            # mise a jour global : mis a jours des arrete du chemin inlcuant le chemin de retour
+            for origine in range(len(self.path)):
+                destination = origine + 1
+                if origine == len(self.path)-1:
+                    destination = depart # le retour au noeud de depart
+                self.colony.tau[origine][destination]=(1-self.colony.alpha)*self.colony.tau[origine][destination] + self.colony.alpha*self.cost
+                self.colony.tau[destination][origine] = self.colony.tau[origine][destination]
             print(self)
 
     def __init__(self, adjMat, m=10, beta=2, alpha=0.1, q_0=0.9):
@@ -68,14 +116,15 @@ class Colony:
 
         self.tau_0 = 1 / (self.n * self.nearestNearbourHeuristic())
         self.tau = [[self.tau_0 for _ in range(self.n)] for _ in range(self.n)]
-        self.ants = [self.Ant(self) for _ in range(self.n)]
+        self.ants = [self.Ant(self) for _ in range(m)]
 
         self.beta = beta
-        self.alpha = 0.1
-        self.q_0 =q_0
+        self.alpha = 0.5
+        self.q_0 = q_0
 
     def __str__(self):
         # TODO
+        return 'Nearest Nearbour Heuristic Cost :  '+ str(self.nearestNearbourHeuristic())
 
     # Returns the cost of the solution produced by 
     # the nearest neighbour heuristix
@@ -83,14 +132,32 @@ class Colony:
         costs = np.zeros(self.n)
 
         # TODO
-
+        for depart in range(self.n): # On itere pour tout les noeuds de depart
+            noeud = depart
+            visite = np.zeros(self.n) # 1 si deja visite, 0 sinon
+            for _ in range(self.n-1): # itere pour tracer le chemin
+                visite[noeud] = 1
+                idx_min = 0 # index
+                while visite[idx_min] != 0: # On trouve le premier candidat
+                    idx_min += 1
+                for noeud_next in range(self.n): # on itere pour trouver l'arete minimum
+                    if not visite[noeud_next]:
+                        if self.adjMat[noeud][noeud_next] < adjMat[noeud][idx_min]:
+                            idx_min = noeud_next
+                
+                # on met a jour le cout de la solution
+                costs[depart] += self.adjMat[noeud][idx_min]
+                noeud = idx_min
+            # on ajoute le cout de retour
+            costs[depart] += self.adjMat[noeud][depart]
+    
         return min(costs)
 
     # Heuristic function
     # Returns inverse of smallest distance between r and u
     def eta(self, r, u):
         # TODO
-        pass
+        return 1/self.adjMat[r][u]
 
     def optimize(self, num_iter):
         for _ in range(num_iter):
@@ -107,10 +174,10 @@ if __name__ == "__main__":
     rand.seed(420)
 
     #file = open('d198')
-    file = open('dantzig.csv')
+    file = open('d198.csv')
 
     adjMat = np.loadtxt(file, delimiter=",")
-
     ant_colony = Colony(adjMat)
-
-    ant_colony.optimize(1000)
+    print(ant_colony)
+    
+    ant_colony.optimize(100)
