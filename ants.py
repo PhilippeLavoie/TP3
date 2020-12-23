@@ -33,6 +33,9 @@ class Colony:
                 # Deterministic decision
                 # TODO
                 u = self.pos
+                '''
+                Version python vanilla peu performante 
+                
                 idx = 0
                 while self.mem[idx]:  # recherche le premier non visite
                     idx += 1
@@ -42,6 +45,11 @@ class Colony:
                             idx = v
 
                 return idx
+                '''
+                adjMat_modif = self.colony.adjMat[u]
+                adjMat_modif[u] = 9223372036854775807 # On modifie la case [u,u] pour evite la division par 0
+                # on calcul ici v = arg max (1-mem[v])*tau[v]*eta(u,v)**beta
+                return np.argmax((1-self.mem) * self.colony.tau[u]/adjMat_modif[u]**self.colony.beta)
             else:
                 # Stochastic decision
                 # TODO
@@ -57,7 +65,8 @@ class Colony:
                 # 2. Generer z ~ U(0,1) uniforme
                 z = rand.random()
 
-                # 3. Generer S : par la methode de l'inverse de la distribution cummuler
+                #3. Generer S : par la methode de l'inverse de la distribution cummuler
+                       
                 cummul = 0
                 S = -1
                 while cummul < z:
@@ -83,24 +92,30 @@ class Colony:
             self.mem[destination] = 1
             self.path.append(destination)
 
+            # Test si il faut revenir au noeud de depart
+            if len(self.path) == self.colony.n :
+                # Update : du l'arrete de retour au noeud de depart 
+                depart = self.path[0]          
+                self.cost += self.colony.adjMat[depart][self.pos]
+                self.colony.tau[self.pos][depart] = (1-self.colony.alpha)*self.colony.tau[self.pos][depart] + self.colony.alpha*self.colony.tau_0
+                self.colony.tau[depart][self.pos] = self.colony.tau[self.pos][depart]
+
         # Updates the pheromone levels of ALL edges that form 
         # the minimum cost loop at each iteration
         def globalUpdate(self):
             # TODO
-            
-            # Update : du l'arrete de retour au noeud de depart 
-            depart = self.path[0]          
-            self.cost += self.colony.adjMat[depart][self.pos]
-            self.colony.tau[self.pos][depart] = (1-self.colony.alpha)*self.colony.tau[self.pos][depart] + self.colony.alpha*self.colony.tau_0
-            self.colony.tau[depart][self.pos] = self.colony.tau[self.pos][depart]
-
+            depart = self.path[0]
             # mise a jour global : mis a jours des arrete du chemin inlcuant le chemin de retour
-            for origine in range(len(self.path)):
-                destination = origine + 1
-                if origine == len(self.path)-1:
+            for i in range(len(self.path)):
+                origine = self.path[i]
+                if i == len(self.path)-1:
                     destination = depart # le retour au noeud de depart
-                self.colony.tau[origine][destination]=(1-self.colony.alpha)*self.colony.tau[origine][destination] + self.colony.alpha*self.cost
-                self.colony.tau[destination][origine] = self.colony.tau[origine][destination]
+                else:
+                    destination = self.path[i+1]
+                # mise a jour : update global sur l'arrete (origine, destination)
+                self.colony.tau[origine][destination]=(1-self.colony.alpha)*self.colony.tau[origine][destination] + self.colony.alpha/self.cost
+                self.colony.tau[destination][origine] = self.colony.tau[origine][destination] # Mise a jour symetrique t(u,r)=t(r,u)
+            
             print(self)
 
     def __init__(self, adjMat, m=10, beta=2, alpha=0.1, q_0=0.9):
@@ -119,12 +134,17 @@ class Colony:
         self.ants = [self.Ant(self) for _ in range(m)]
 
         self.beta = beta
-        self.alpha = 0.5
+        self.alpha = alpha
         self.q_0 = q_0
 
     def __str__(self):
         # TODO
-        return 'Nearest Nearbour Heuristic Cost :  '+ str(self.nearestNearbourHeuristic())
+        nn_val = 1/(self.n*self.tau_0)
+        txt = 'Colony \n'
+        txt += 'Nombre de fourmis: ' + str(len(self.ants)) + '\n'
+        txt += 'Params : alpha='+ str(self.alpha) + " beta=" + str(self.beta) + ' q0=' + str(self.q_0) + '\n'
+        txt += 'Nearest Nearbour Heuristic Cost :  ' + str(nn_val)
+        return txt
 
     # Returns the cost of the solution produced by 
     # the nearest neighbour heuristix
@@ -167,17 +187,18 @@ class Colony:
 
             min(self.ants).globalUpdate()
 
+
             for ant in self.ants:
                 ant.reset(self)
 
 if __name__ == "__main__":
-    rand.seed(420)
+    rand.seed(421)
+    np.random.seed(70)
 
-    #file = open('d198')
-    file = open('d198.csv')
+    #file = open('d198.csv')
+    file = open('dantzig.csv')
 
     adjMat = np.loadtxt(file, delimiter=",")
     ant_colony = Colony(adjMat)
     print(ant_colony)
-    
-    ant_colony.optimize(100)
+    ant_colony.optimize(1000)
