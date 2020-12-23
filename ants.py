@@ -49,7 +49,7 @@ class Colony:
                 adjMat_modif = self.colony.adjMat[u]
                 adjMat_modif[u] = 9223372036854775807 # On modifie la case [u,u] pour evite la division par 0
                 # on calcul ici v = arg max (1-mem[v])*tau[v]*eta(u,v)**beta
-                return np.argmax((1-self.mem) * self.colony.tau[u]/adjMat_modif[u]**self.colony.beta)
+                return np.argmax((1-self.mem) * self.colony.tau[u]/adjMat_modif**self.colony.beta)
             else:
                 # Stochastic decision
                 # TODO
@@ -201,4 +201,5 @@ if __name__ == "__main__":
     adjMat = np.loadtxt(file, delimiter=",")
     ant_colony = Colony(adjMat)
     print(ant_colony)
+    
     ant_colony.optimize(1000)
